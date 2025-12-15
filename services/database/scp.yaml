@@ -1,0 +1,74 @@
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:demo-database:postgres"
+  name: "Demo Database"
+  description: "PostgreSQL database for the SCP demo"
+  classification:
+    tier: 1
+    domain: "data"
+    tags:
+      - "database"
+      - "postgres"
+      - "stateful"
+
+ownership:
+  team: "data-team"
+  contacts:
+    - type: "slack"
+      ref: "slack://channel/C-DATA"
+    - type: "pagerduty"
+      ref: "https://pagerduty.com/services/DATA"
+  escalation:
+    - "data-team"
+    - "platform-team"
+    - "sre-team"
+
+provides:
+  - capability: "data-storage"
+    type: "data"
+    sla:
+      availability: "99.99%"
+      latency_p99_ms: 50
+
+constraints:
+  security:
+    authentication: ["password", "mtls"]
+    data_classification: "internal"
+    encryption:
+      at_rest: true
+      in_transit: true
+  compliance:
+    data_residency: ["us-west-2"]
+    retention_days: 365
+  operational:
+    max_replicas: 3
+    min_replicas: 1
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "demo-database"
+      endpoints:
+        - "postgres://db.demo.example.com:5432/demo"
+      kubernetes:
+        namespace: "demo"
+        deployment: "demo-postgres"
+    development:
+      otel_service_name: "demo-database-dev"
+      endpoints:
+        - "postgres://localhost:5432/demo"
+
+failure_modes:
+  - mode: "primary-unavailable"
+    impact: "total-outage"
+    detection: "health-check"
+    recovery: "manual-failover"
+    degraded_behavior: "No writes possible, reads from replica"
+    mttr_target_minutes: 10
+  - mode: "replication-lag"
+    impact: "degraded-experience"
+    detection: "monitoring"
+    recovery: "auto"
+    degraded_behavior: "Stale reads from replica"
+    mttr_target_minutes: 5

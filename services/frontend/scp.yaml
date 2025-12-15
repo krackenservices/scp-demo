@@ -1,0 +1,55 @@
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:demo-frontend:web"
+  name: "Demo Frontend"
+  description: "React web application for the SCP demo"
+  classification:
+    tier: 2
+    domain: "presentation"
+    tags:
+      - "user-facing"
+      - "web"
+
+ownership:
+  team: "frontend-team"
+  contacts:
+    - type: "slack"
+      ref: "slack://channel/C-FRONTEND"
+
+provides:
+  - capability: "web-ui"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./openapi.yaml"
+    sla:
+      availability: "99.9%"
+      latency_p99_ms: 200
+
+depends:
+  - system: "urn:scp:demo-api:rest"
+    capability: "rest-api"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "fail-fast"
+    timeout_ms: 5000
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "demo-frontend"
+      endpoints:
+        - "https://demo.example.com"
+    development:
+      otel_service_name: "demo-frontend-dev"
+      endpoints:
+        - "http://localhost:3000"
+
+failure_modes:
+  - mode: "api-unavailable"
+    impact: "total-outage"
+    detection: "health-check"
+    recovery: "manual"
+    degraded_behavior: "Shows error message to user"
+    mttr_target_minutes: 15

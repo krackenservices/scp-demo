@@ -1,0 +1,85 @@
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:demo-api:rest"
+  name: "Demo API"
+  description: "Express REST API for the SCP demo"
+  classification:
+    tier: 1
+    domain: "backend"
+    tags:
+      - "api"
+      - "rest"
+
+ownership:
+  team: "backend-team"
+  contacts:
+    - type: "slack"
+      ref: "slack://channel/C-BACKEND"
+    - type: "pagerduty"
+      ref: "https://pagerduty.com/services/BACKEND"
+  escalation:
+    - "backend-team"
+    - "platform-team"
+
+provides:
+  - capability: "rest-api"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./openapi.yaml"
+    sla:
+      availability: "99.95%"
+      latency_p99_ms: 100
+      throughput_rps: 1000
+
+depends:
+  - system: "urn:scp:demo-database:postgres"
+    capability: "data-storage"
+    type: "data"
+    criticality: "degraded"
+    failure_mode: "fallback"
+    timeout_ms: 3000
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+    circuit_breaker:
+      failure_threshold: 5
+      reset_timeout_ms: 30000
+
+constraints:
+  security:
+    authentication: ["api-key"]
+    encryption:
+      in_transit: true
+  operational:
+    max_replicas: 10
+    min_replicas: 2
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "demo-api"
+      endpoints:
+        - "https://api.demo.example.com"
+      kubernetes:
+        namespace: "demo"
+        deployment: "demo-api"
+    development:
+      otel_service_name: "demo-api-dev"
+      endpoints:
+        - "http://localhost:4000"
+
+failure_modes:
+  - mode: "database-unavailable"
+    impact: "degraded-experience"
+    detection: "health-check"
+    recovery: "auto-failover"
+    degraded_behavior: "Returns cached/sample data"
+    mttr_target_minutes: 5
+  - mode: "high-latency"
+    impact: "degraded-experience"
+    detection: "latency-threshold"
+    recovery: "auto-scale"
+    degraded_behavior: "Increased response times"
+    mttr_target_minutes: 2
