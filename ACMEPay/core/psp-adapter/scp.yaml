@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-psp"
+  name: "PSP Adapter"
+  description: "Payment Service Provider adapter. Integrates with external payment gateways (Stripe, Adyen, etc.)."
+  version: "3.1.0"
+  classification:
+    tier: 1
+    domain: "payments"
+    tags:
+      - "psp"
+      - "gateway"
+      - "critical"
+      - "pci-compliant"
+
+ownership:
+  team: "payments-platform"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-payments-critical-24x7"
+    - type: "slack"
+      ref: "#team-payments"
+  escalation:
+    - "payments-platform"
+    - "director-payments"
+
+provides:
+  - capability: "charge-processing"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/psp.yaml"
+    sla:
+      availability: "99.95%"
+      latency_p99_ms: 10000
+      throughput_rps: 1000
+
+depends:
+  - system: "urn:scp:ext-psp-gateway"
+    capability: "payment-processing"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "circuit-break"
+    timeout_ms: 15000
+    circuit_breaker:
+      failure_threshold: 5
+      reset_timeout_ms: 60000
+
+constraints:
+  security:
+    authentication: ["mutual-tls", "service-token"]
+    data_classification: "PCI"
+    encryption:
+      at_rest: true
+      in_transit: true
+  compliance:
+    frameworks: ["PCI-DSS"]
+  operational:
+    min_replicas: 5
+    max_replicas: 30
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-psp"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "psp-adapter"
+
+failure_modes:
+  - mode: "psp-unavailable"
+    impact: "total-outage"
+    detection: "Gateway connection failures"
+    recovery: "Failover to secondary PSP"
+    degraded_behavior: "Payments fail until failover"
+    mttr_target_minutes: 2
+  - mode: "psp-rate-limited"
+    impact: "degraded-experience"
+    detection: "HTTP 429 from PSP"
+    recovery: "Throttle requests, queue overflow"
+    degraded_behavior: "Increased payment latency"
+    mttr_target_minutes: 5

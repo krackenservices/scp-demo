@@ -1,0 +1,81 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-auth"
+  name: "Auth Identity Service"
+  description: "Handles authentication, identity verification, and token management for ACMEPay."
+  version: "2.1.0"
+  classification:
+    tier: 1
+    domain: "edge"
+    tags:
+      - "authentication"
+      - "identity"
+      - "security"
+      - "critical"
+
+ownership:
+  team: "security-team"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-security-critical"
+    - type: "slack"
+      ref: "#team-security"
+  escalation:
+    - "security-team"
+    - "ciso"
+
+provides:
+  - capability: "token-validation"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/auth.yaml"
+    sla:
+      availability: "99.99%"
+      latency_p99_ms: 25
+      throughput_rps: 100000
+  - capability: "identity-events"
+    type: "event"
+    topics:
+      - "auth.login.success"
+      - "auth.login.failed"
+      - "auth.token.revoked"
+
+constraints:
+  security:
+    authentication: ["mutual-tls", "service-token"]
+    data_classification: "SENSITIVE"
+    encryption:
+      at_rest: true
+      in_transit: true
+  compliance:
+    frameworks: ["SOC2", "PCI-DSS"]
+  operational:
+    min_replicas: 5
+    max_replicas: 50
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-auth"
+      endpoints:
+        - "https://auth.acmepay.com"
+      kubernetes:
+        namespace: "acmepay-edge"
+        deployment: "auth-identity"
+
+failure_modes:
+  - mode: "token-store-unavailable"
+    impact: "total-outage"
+    detection: "Redis connection failures"
+    recovery: "Failover to replica"
+    degraded_behavior: "All auth requests fail"
+    mttr_target_minutes: 1
+  - mode: "high-latency"
+    impact: "degraded-experience"
+    detection: "P99 > 100ms"
+    recovery: "Auto-scale, cache optimization"
+    degraded_behavior: "Increased login times"
+    mttr_target_minutes: 5

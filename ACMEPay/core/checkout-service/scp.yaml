@@ -1,0 +1,83 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-checkout"
+  name: "Checkout Service"
+  description: "Initiates payment flows from merchant checkout sessions."
+  version: "3.2.0"
+  classification:
+    tier: 1
+    domain: "payments"
+    tags:
+      - "checkout"
+      - "critical"
+      - "pci-compliant"
+
+ownership:
+  team: "checkout-team"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-checkout-critical"
+    - type: "slack"
+      ref: "#team-checkout"
+  escalation:
+    - "checkout-team"
+    - "payments-platform"
+
+provides:
+  - capability: "checkout-api"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/checkout.yaml"
+    sla:
+      availability: "99.95%"
+      latency_p99_ms: 200
+      throughput_rps: 5000
+  - capability: "checkout-events"
+    type: "event"
+    topics:
+      - "checkout.initiated"
+      - "checkout.completed"
+      - "checkout.abandoned"
+
+depends:
+  - system: "urn:scp:acmepay-orchestrator"
+    capability: "payment-processing"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "circuit-break"
+    timeout_ms: 10000
+    circuit_breaker:
+      failure_threshold: 5
+      reset_timeout_ms: 30000
+
+constraints:
+  security:
+    authentication: ["oauth2", "api-key"]
+    data_classification: "PCI"
+    encryption:
+      at_rest: true
+      in_transit: true
+  compliance:
+    frameworks: ["PCI-DSS", "SOC2"]
+  operational:
+    min_replicas: 3
+    max_replicas: 30
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-checkout"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "checkout-service"
+
+failure_modes:
+  - mode: "orchestrator-unavailable"
+    impact: "total-outage"
+    detection: "Orchestrator API errors > 50%"
+    recovery: "Circuit breaker, queue checkout requests"
+    degraded_behavior: "Checkouts queued for retry"
+    mttr_target_minutes: 3

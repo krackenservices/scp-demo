@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-notify"
+  name: "Notification Service"
+  description: "Multi-channel notification delivery for payment events (email, SMS, push)."
+  version: "1.5.0"
+  classification:
+    tier: 3
+    domain: "communications"
+    tags:
+      - "notifications"
+      - "async"
+
+ownership:
+  team: "platform-team"
+  contacts:
+    - type: "slack"
+      ref: "#team-platform"
+  escalation:
+    - "platform-team"
+
+provides:
+  - capability: "notification-delivery"
+    type: "event"
+    topics:
+      - "notification.sent"
+      - "notification.delivered"
+      - "notification.failed"
+    sla:
+      availability: "99.5%"
+      throughput_rps: 5000
+
+depends:
+  - system: "urn:scp:acmepay-eventbus"
+    type: "stream"
+    criticality: "required"
+    failure_mode: "retry"
+    topics:
+      - "payment-events"
+  - system: "urn:scp:ext-messaging"
+    capability: "email-sms-delivery"
+    type: "rest"
+    criticality: "degraded"
+    failure_mode: "queue-buffer"
+    timeout_ms: 5000
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+
+constraints:
+  operational:
+    min_replicas: 2
+    max_replicas: 15
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-notify"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "notification-service"
+
+failure_modes:
+  - mode: "messaging-provider-down"
+    impact: "degraded-experience"
+    detection: "External API failures"
+    recovery: "Queue messages for retry"
+    degraded_behavior: "Delayed notifications"
+    mttr_target_minutes: 0
+  - mode: "all-channels-down"
+    impact: "partial-outage"
+    detection: "All provider APIs failing"
+    recovery: "Alert operations"
+    degraded_behavior: "Notifications queued indefinitely"
+    mttr_target_minutes: 30

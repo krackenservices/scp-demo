@@ -1,0 +1,98 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-settlement"
+  name: "Settlement Service"
+  description: "Processes merchant settlements and bank payouts."
+  version: "2.2.0"
+  classification:
+    tier: 1
+    domain: "payments"
+    tags:
+      - "settlement"
+      - "critical"
+      - "financial"
+
+ownership:
+  team: "treasury-team"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-treasury-critical"
+    - type: "slack"
+      ref: "#team-treasury"
+  escalation:
+    - "treasury-team"
+    - "cfo"
+
+provides:
+  - capability: "settlement-query"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/settlement.yaml"
+    sla:
+      availability: "99.9%"
+      latency_p99_ms: 500
+      throughput_rps: 500
+  - capability: "settlement-events"
+    type: "event"
+    topics:
+      - "settlement.initiated"
+      - "settlement.completed"
+      - "settlement.failed"
+
+depends:
+  - system: "urn:scp:acmepay-eventbus"
+    type: "stream"
+    criticality: "required"
+    failure_mode: "retry"
+    topics:
+      - "payment-events"
+  - system: "urn:scp:ext-bank-rails"
+    capability: "payout-processing"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "queue-buffer"
+    timeout_ms: 30000
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+
+constraints:
+  security:
+    authentication: ["mutual-tls", "service-token"]
+    data_classification: "SENSITIVE"
+    encryption:
+      at_rest: true
+      in_transit: true
+  compliance:
+    frameworks: ["SOC2"]
+    retention_days: 2555
+  operational:
+    min_replicas: 3
+    max_replicas: 10
+    deployment_windows:
+      - "weekdays 09:00-17:00 UTC"
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-settlement"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "settlement-service"
+
+failure_modes:
+  - mode: "bank-api-unavailable"
+    impact: "partial-outage"
+    detection: "Bank API failures"
+    recovery: "Queue settlements for retry"
+    degraded_behavior: "Settlements delayed"
+    mttr_target_minutes: 60
+  - mode: "settlement-mismatch"
+    impact: "data-inconsistency"
+    detection: "Reconciliation alerts"
+    recovery: "Manual review required"
+    degraded_behavior: "Some settlements need manual processing"
+    mttr_target_minutes: 120

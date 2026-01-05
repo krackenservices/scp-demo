@@ -1,0 +1,113 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-orchestrator"
+  name: "Payment Orchestrator"
+  description: "Central payment coordination service. Orchestrates fraud checks, PSP calls, and event publishing."
+  version: "4.5.0"
+  classification:
+    tier: 1
+    domain: "payments"
+    tags:
+      - "orchestrator"
+      - "critical"
+      - "pci-compliant"
+      - "revenue"
+
+ownership:
+  team: "payments-platform"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-payments-critical-24x7"
+    - type: "slack"
+      ref: "#team-payments"
+  escalation:
+    - "payments-platform"
+    - "director-payments"
+    - "vp-engineering"
+
+provides:
+  - capability: "payment-processing"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/payments-v4.yaml"
+    sla:
+      availability: "99.95%"
+      latency_p99_ms: 500
+      throughput_rps: 2000
+  - capability: "payment-events"
+    type: "event"
+    topics:
+      - "payment.initiated"
+      - "payment.authorized"
+      - "payment.captured"
+      - "payment.failed"
+      - "payment.refunded"
+
+depends:
+  - system: "urn:scp:acmepay-fraud"
+    capability: "fraud-check"
+    type: "rest"
+    criticality: "degraded"
+    failure_mode: "fallback"
+    timeout_ms: 1000
+  - system: "urn:scp:acmepay-psp"
+    capability: "charge-processing"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "circuit-break"
+    timeout_ms: 15000
+    circuit_breaker:
+      failure_threshold: 5
+      reset_timeout_ms: 60000
+  - system: "urn:scp:acmepay-eventbus"
+    type: "stream"
+    criticality: "required"
+    failure_mode: "retry"
+    topics:
+      - "payment-events"
+
+constraints:
+  security:
+    authentication: ["mutual-tls", "service-token"]
+    data_classification: "PCI"
+    encryption:
+      at_rest: true
+      in_transit: true
+  compliance:
+    frameworks: ["PCI-DSS", "SOC2", "GDPR"]
+    data_residency: ["US", "EU"]
+    retention_days: 2555
+  operational:
+    min_replicas: 5
+    max_replicas: 50
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-orchestrator"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "payment-orchestrator"
+
+failure_modes:
+  - mode: "psp-gateway-timeout"
+    impact: "total-outage"
+    detection: "PSP API p99 > 15s"
+    recovery: "Circuit breaker, failover to backup PSP"
+    degraded_behavior: "Payments queued for retry"
+    mttr_target_minutes: 2
+  - mode: "fraud-service-unavailable"
+    impact: "degraded-experience"
+    detection: "Fraud API error rate > 50%"
+    recovery: "Use rule-based fallback"
+    degraded_behavior: "Stricter default fraud rules applied"
+    mttr_target_minutes: 10
+  - mode: "event-bus-lag"
+    impact: "data-inconsistency"
+    detection: "Producer lag > 10000 messages"
+    recovery: "Scale Kafka, increase producers"
+    degraded_behavior: "Delayed downstream updates"
+    mttr_target_minutes: 15

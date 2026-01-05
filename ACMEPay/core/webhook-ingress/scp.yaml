@@ -1,0 +1,79 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-webhook"
+  name: "Webhook Ingress"
+  description: "Receives webhook callbacks from external PSPs and routes to orchestrator."
+  version: "1.2.0"
+  classification:
+    tier: 2
+    domain: "payments"
+    tags:
+      - "webhook"
+      - "async"
+
+ownership:
+  team: "payments-platform"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-payments"
+    - type: "slack"
+      ref: "#team-payments"
+  escalation:
+    - "payments-platform"
+
+provides:
+  - capability: "webhook-ingress"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/webhooks.yaml"
+    sla:
+      availability: "99.9%"
+      latency_p99_ms: 100
+      throughput_rps: 10000
+
+depends:
+  - system: "urn:scp:acmepay-orchestrator"
+    capability: "payment-update"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "queue-buffer"
+    timeout_ms: 5000
+    retry:
+      max_attempts: 5
+      backoff: "exponential"
+
+constraints:
+  security:
+    authentication: ["webhook-signature"]
+    encryption:
+      in_transit: true
+  operational:
+    min_replicas: 3
+    max_replicas: 20
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-webhook"
+      endpoints:
+        - "https://webhooks.acmepay.com"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "webhook-ingress"
+
+failure_modes:
+  - mode: "orchestrator-unavailable"
+    impact: "data-inconsistency"
+    detection: "Orchestrator API failures"
+    recovery: "Queue webhooks for retry"
+    degraded_behavior: "Webhooks buffered, delayed processing"
+    mttr_target_minutes: 10
+  - mode: "webhook-flood"
+    impact: "degraded-experience"
+    detection: "Request rate > 10000/s"
+    recovery: "Auto-scale, rate limit by PSP"
+    degraded_behavior: "Some webhooks delayed"
+    mttr_target_minutes: 5

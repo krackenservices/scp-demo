@@ -1,0 +1,73 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-reporting"
+  name: "Reporting Service"
+  description: "Analytics, reporting, and data export for payments data."
+  version: "1.8.0"
+  classification:
+    tier: 2
+    domain: "analytics"
+    tags:
+      - "reporting"
+      - "analytics"
+      - "bi"
+
+ownership:
+  team: "data-team"
+  contacts:
+    - type: "slack"
+      ref: "#team-data"
+  escalation:
+    - "data-team"
+
+provides:
+  - capability: "reporting-api"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/reporting.yaml"
+    sla:
+      availability: "99.5%"
+      latency_p99_ms: 5000
+      throughput_rps: 100
+
+depends:
+  - system: "urn:scp:acmepay-eventbus"
+    type: "stream"
+    criticality: "required"
+    failure_mode: "retry"
+    topics:
+      - "payment-events"
+  - system: "urn:scp:ext-dwh"
+    capability: "data-export"
+    type: "data"
+    criticality: "degraded"
+    failure_mode: "queue-buffer"
+    access: "write"
+
+constraints:
+  security:
+    authentication: ["oauth2"]
+    encryption:
+      in_transit: true
+  operational:
+    min_replicas: 2
+    max_replicas: 10
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-reporting"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "reporting-service"
+
+failure_modes:
+  - mode: "dwh-export-failure"
+    impact: "data-inconsistency"
+    detection: "Export job failures"
+    recovery: "Retry export, alert team"
+    degraded_behavior: "BI data delayed"
+    mttr_target_minutes: 60
