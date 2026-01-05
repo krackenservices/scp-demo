@@ -29,7 +29,8 @@ git clone https://github.com/krackenservices/scp-demo.git
 
 cd scp-viewer
 
-V_DATA=../scp-demo/services docker compose --profile scan up
+make up
+V_DATA=../scp-demo/services make scan
 
 http://localhost:3000
 ```
