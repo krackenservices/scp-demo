@@ -24,11 +24,14 @@ A demonstration monorepo showing a 3-tier application with SCP manifests.
 
 ```bash
 # Start all services
-docker-compose up
+git clone https://github.com/krackenservices/scp-viewer.git
+git clone https://github.com/krackenservices/scp-demo.git
 
-# Or run individually
-cd services/frontend && npm run dev
-cd services/api && npm run dev
+cd scp-viewer
+
+V_DATA=../scp-demo/services docker compose --profile scan up
+
+http://localhost:3000
 ```
 
 ## SCP Manifests
