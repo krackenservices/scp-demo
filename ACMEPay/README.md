@@ -60,7 +60,17 @@ A dummy monorepo modeling a real-world payment processing system, used for demon
 Use with [scp-viewer](https://github.com/krackenservices/scp-viewer) to visualize the architecture:
 
 ```bash
-scp-viewer scan ./ACMEPay
+git clone https://github.com/krackenservices/scp-viewer.git
+git clone https://github.com/krackenservices/scp-demo.git
+
+cd scp-viewer
+V_DATA=../scp-demo/ACMEPay make scan
+```
+
+Use with [scp-cli](https://github.com/krackenservices/scp-cli) to visualize the architecture:
+
+```bash
+scp-cli scan ./scp-demo/ACMEPay --export mermaid
 ```
 
 ```mermaid
