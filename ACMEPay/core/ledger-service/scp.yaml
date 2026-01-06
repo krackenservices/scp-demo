@@ -1,0 +1,87 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-ledger"
+  name: "Ledger Service"
+  description: "Transaction ledger and balance management. Source of truth for payment states."
+  version: "2.0.0"
+  classification:
+    tier: 1
+    domain: "payments"
+    tags:
+      - "ledger"
+      - "critical"
+      - "pci-compliant"
+      - "financial"
+
+ownership:
+  team: "ledger-team"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-ledger-critical"
+    - type: "slack"
+      ref: "#team-ledger"
+  escalation:
+    - "ledger-team"
+    - "director-payments"
+
+provides:
+  - capability: "ledger-query"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/ledger.yaml"
+    sla:
+      availability: "99.99%"
+      latency_p99_ms: 100
+      throughput_rps: 10000
+  - capability: "balance-events"
+    type: "event"
+    topics:
+      - "ledger.entry.created"
+      - "ledger.balance.updated"
+
+depends:
+  - system: "urn:scp:acmepay-eventbus"
+    type: "stream"
+    criticality: "required"
+    failure_mode: "retry"
+    topics:
+      - "payment-events"
+
+constraints:
+  security:
+    authentication: ["service-token"]
+    data_classification: "PCI"
+    encryption:
+      at_rest: true
+      in_transit: true
+  compliance:
+    frameworks: ["PCI-DSS", "SOC2"]
+    retention_days: 2555
+  operational:
+    min_replicas: 5
+    max_replicas: 30
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-ledger"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "ledger-service"
+
+failure_modes:
+  - mode: "database-unavailable"
+    impact: "total-outage"
+    detection: "Database connection failures"
+    recovery: "Failover to replica"
+    degraded_behavior: "All ledger operations fail"
+    mttr_target_minutes: 1
+  - mode: "event-lag"
+    impact: "data-inconsistency"
+    detection: "Consumer lag > 5000 events"
+    recovery: "Scale consumers"
+    degraded_behavior: "Delayed balance updates"
+    mttr_target_minutes: 10

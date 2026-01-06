@@ -1,0 +1,78 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-eventbus"
+  name: "Event Bus"
+  description: "Central event backbone for ACMEPay. Kafka-based event streaming for payment domain events."
+  version: "1.0.0"
+  classification:
+    tier: 1
+    domain: "infrastructure"
+    tags:
+      - "kafka"
+      - "events"
+      - "critical"
+      - "backbone"
+
+ownership:
+  team: "platform-team"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-platform-critical"
+    - type: "slack"
+      ref: "#team-platform"
+  escalation:
+    - "platform-team"
+    - "vp-engineering"
+
+provides:
+  - capability: "event-streaming"
+    type: "stream"
+    sla:
+      availability: "99.99%"
+      throughput_rps: 100000
+    topics:
+      - "payment-events"
+      - "checkout-events"
+      - "ledger-events"
+      - "settlement-events"
+      - "notification-events"
+
+constraints:
+  security:
+    authentication: ["mutual-tls"]
+    encryption:
+      at_rest: true
+      in_transit: true
+  operational:
+    min_replicas: 3
+    max_replicas: 9
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-eventbus"
+      kubernetes:
+        namespace: "acmepay-infra"
+        deployment: "kafka-cluster"
+
+failure_modes:
+  - mode: "broker-failure"
+    impact: "degraded-experience"
+    detection: "Broker health checks"
+    recovery: "Auto-replace broker, rebalance"
+    degraded_behavior: "Increased latency during rebalance"
+    mttr_target_minutes: 5
+  - mode: "partition-unavailable"
+    impact: "partial-outage"
+    detection: "Under-replicated partitions"
+    recovery: "ISR recovery, manual intervention"
+    degraded_behavior: "Some topics unavailable"
+    mttr_target_minutes: 10
+  - mode: "disk-full"
+    impact: "total-outage"
+    detection: "Disk space monitoring"
+    recovery: "Expand storage, increase retention policy"
+    degraded_behavior: "Producers blocked"
+    mttr_target_minutes: 15

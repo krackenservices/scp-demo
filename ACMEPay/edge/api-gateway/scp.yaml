@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-gateway"
+  name: "API Gateway"
+  description: "Ingress gateway for all ACMEPay APIs. Routes requests from upstreams to internal services."
+  version: "1.0.0"
+  classification:
+    tier: 1
+    domain: "edge"
+    tags:
+      - "gateway"
+      - "ingress"
+      - "critical"
+
+ownership:
+  team: "platform-team"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-platform-critical"
+    - type: "slack"
+      ref: "#team-platform"
+  escalation:
+    - "platform-team"
+    - "vp-engineering"
+
+provides:
+  - capability: "api-routing"
+    type: "rest"
+    sla:
+      availability: "99.99%"
+      latency_p99_ms: 50
+      throughput_rps: 50000
+
+depends:
+  - system: "urn:scp:acmepay-auth"
+    capability: "token-validation"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "fail-fast"
+    timeout_ms: 100
+  - system: "urn:scp:acmepay-checkout"
+    capability: "checkout-api"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "circuit-break"
+    timeout_ms: 5000
+  - system: "urn:scp:acmepay-orchestrator"
+    capability: "payment-api"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "circuit-break"
+    timeout_ms: 10000
+  - system: "urn:scp:acmepay-ledger"
+    capability: "ledger-query"
+    type: "rest"
+    criticality: "degraded"
+    failure_mode: "fallback"
+    timeout_ms: 3000
+  - system: "urn:scp:acmepay-reporting"
+    capability: "reporting-api"
+    type: "rest"
+    criticality: "degraded"
+    failure_mode: "fallback"
+    timeout_ms: 5000
+  - system: "urn:scp:acmepay-settlement"
+    capability: "settlement-query"
+    type: "rest"
+    criticality: "degraded"
+    failure_mode: "fallback"
+    timeout_ms: 3000
+  - system: "urn:scp:acmepay-recon"
+    capability: "recon-query"
+    type: "rest"
+    criticality: "optional"
+    failure_mode: "fallback"
+    timeout_ms: 3000
+
+constraints:
+  security:
+    authentication: ["api-key", "oauth2", "jwt"]
+    encryption:
+      in_transit: true
+  operational:
+    min_replicas: 5
+    max_replicas: 100
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-gateway"
+      endpoints:
+        - "https://api.acmepay.com"
+      kubernetes:
+        namespace: "acmepay-edge"
+        deployment: "api-gateway"
+
+failure_modes:
+  - mode: "auth-service-unavailable"
+    impact: "total-outage"
+    detection: "Health check failures"
+    recovery: "Auto-failover to backup auth"
+    degraded_behavior: "All requests rejected"
+    mttr_target_minutes: 2
+  - mode: "rate-limit-exceeded"
+    impact: "degraded-experience"
+    detection: "429 response rate > 1%"
+    recovery: "Auto-scale, alert operations"
+    degraded_behavior: "Some requests throttled"
+    mttr_target_minutes: 5

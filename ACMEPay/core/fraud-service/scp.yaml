@@ -1,0 +1,84 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:acmepay-fraud"
+  name: "Fraud Service"
+  description: "Fraud detection and risk scoring for payment transactions."
+  version: "2.3.0"
+  classification:
+    tier: 2
+    domain: "payments"
+    tags:
+      - "fraud"
+      - "risk"
+      - "ml"
+
+ownership:
+  team: "risk-team"
+  contacts:
+    - type: "pagerduty"
+      ref: "acmepay-risk"
+    - type: "slack"
+      ref: "#team-risk"
+  escalation:
+    - "risk-team"
+    - "payments-platform"
+
+provides:
+  - capability: "fraud-check"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./api/fraud.yaml"
+    sla:
+      availability: "99.9%"
+      latency_p99_ms: 500
+      throughput_rps: 5000
+  - capability: "fraud-events"
+    type: "event"
+    topics:
+      - "fraud.flagged"
+      - "fraud.cleared"
+
+depends:
+  - system: "urn:scp:ext-fraud-provider"
+    capability: "ml-scoring"
+    type: "rest"
+    criticality: "degraded"
+    failure_mode: "fallback"
+    timeout_ms: 800
+    retry:
+      max_attempts: 2
+      backoff: "exponential"
+
+constraints:
+  security:
+    authentication: ["service-token"]
+    encryption:
+      in_transit: true
+  operational:
+    min_replicas: 3
+    max_replicas: 20
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "acmepay-fraud"
+      kubernetes:
+        namespace: "acmepay-core"
+        deployment: "fraud-service"
+
+failure_modes:
+  - mode: "external-provider-down"
+    impact: "degraded-experience"
+    detection: "External API error rate > 50%"
+    recovery: "Use internal rule-based fallback"
+    degraded_behavior: "Conservative fraud rules applied"
+    mttr_target_minutes: 0
+  - mode: "high-latency"
+    impact: "degraded-experience"
+    detection: "P99 > 1s"
+    recovery: "Auto-scale, alert team"
+    degraded_behavior: "Increased payment latency"
+    mttr_target_minutes: 5
