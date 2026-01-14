@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/krackenservices/scp-definition/main/spec/scp.schema.json
+scp: "0.1.0"
+
+system:
+  urn: "urn:scp:example:mcp-server"
+  name: "MCP Server"
+  description: "Model Context Protocol server that exposes query capabilities to AI assistants via HTTP/SSE or stdio transport"
+  classification:
+    tier: 3
+    domain: "integration"
+    tags:
+      - "mcp"
+      - "ai-integration"
+      - "experimental"
+
+ownership:
+  team: "integration-team"
+  contacts:
+    - type: "email"
+      ref: "mailto:integration-team@example.com"
+
+provides:
+  - capability: "mcp-server"
+    type: "rest"
+    contract:
+      type: "openapi"
+      ref: "./docs/mcp-protocol.yaml"
+    sla:
+      availability: "99.0%"
+      latency_p99_ms: 5000
+
+depends:
+  - system: "urn:scp:example:backend-api"
+    capability: "rest-api"
+    type: "rest"
+    criticality: "required"
+    failure_mode: "fail-fast"
+    timeout_ms: 10000
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+
+constraints:
+  security:
+    authentication: ["api-key"]
+    encryption:
+      in_transit: true
+  operational:
+    max_replicas: 3
+    min_replicas: 1
+
+runtime:
+  environments:
+    production:
+      otel_service_name: "mcp-server"
+      endpoints:
+        - "http://localhost:3210/mcp"
+    development:
+      otel_service_name: "mcp-server-dev"
+      endpoints:
+        - "http://localhost:3210/mcp"
+
+failure_modes:
+  - mode: "backend-api-unavailable"
+    impact: "total-outage"
+    detection: "health-check"
+    recovery: "manual"
+    degraded_behavior: "MCP server returns error responses to AI assistant queries"
+    mttr_target_minutes: 15

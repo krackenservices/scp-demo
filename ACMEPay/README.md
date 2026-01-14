@@ -39,21 +39,21 @@ A dummy monorepo modeling a real-world payment processing system, used for demon
 
 ## Services
 
-| Layer | Service | URN |
-|-------|---------|-----|
-| Edge | API Gateway | `urn:scp:acmepay-gateway` |
-| Edge | Auth/Identity | `urn:scp:acmepay-auth` |
-| Core | Checkout | `urn:scp:acmepay-checkout` |
-| Core | Orchestrator | `urn:scp:acmepay-orchestrator` |
-| Core | Fraud | `urn:scp:acmepay-fraud` |
-| Core | PSP Adapter | `urn:scp:acmepay-psp` |
-| Core | Webhook Ingress | `urn:scp:acmepay-webhook` |
-| Core | Ledger | `urn:scp:acmepay-ledger` |
-| Core | Notification | `urn:scp:acmepay-notify` |
-| Core | Settlement | `urn:scp:acmepay-settlement` |
-| Core | Reconciliation | `urn:scp:acmepay-recon` |
-| Core | Reporting | `urn:scp:acmepay-reporting` |
-| Core | Event Bus | `urn:scp:acmepay-eventbus` |
+| Layer | Service         | URN                            |
+| ----- | --------------- | ------------------------------ |
+| Edge  | API Gateway     | `urn:scp:acmepay-gateway`      |
+| Edge  | Auth/Identity   | `urn:scp:acmepay-auth`         |
+| Core  | Checkout        | `urn:scp:acmepay-checkout`     |
+| Core  | Orchestrator    | `urn:scp:acmepay-orchestrator` |
+| Core  | Fraud           | `urn:scp:acmepay-fraud`        |
+| Core  | PSP Adapter     | `urn:scp:acmepay-psp`          |
+| Core  | Webhook Ingress | `urn:scp:acmepay-webhook`      |
+| Core  | Ledger          | `urn:scp:acmepay-ledger`       |
+| Core  | Notification    | `urn:scp:acmepay-notify`       |
+| Core  | Settlement      | `urn:scp:acmepay-settlement`   |
+| Core  | Reconciliation  | `urn:scp:acmepay-recon`        |
+| Core  | Reporting       | `urn:scp:acmepay-reporting`    |
+| Core  | Event Bus       | `urn:scp:acmepay-eventbus`     |
 
 ## Usage
 
@@ -67,11 +67,13 @@ cd scp-viewer
 V_DATA=../scp-demo/ACMEPay make scan
 ```
 
-Use with [scp-cli](https://github.com/krackenservices/scp-cli) to visualize the architecture:
+Use with [scp-cli](https://github.com/krackenservices/scp-cli) to generate diagrams:
 
 ```bash
-scp-cli scan ./scp-demo/ACMEPay --export mermaid
+scp-cli scan ./scp-demo/ACMEPay --export mermaid -o acmepay.mmd
 ```
+
+## Architecture Diagram
 
 ```mermaid
 flowchart LR
@@ -96,20 +98,20 @@ flowchart LR
     acmepay_gateway[["🔴 API Gateway"]]
     acmepay_auth[["🔴 Auth Identity Service"]]
 
-    %% Dependencies
+    %% Direct Dependencies
     acmepay_checkout -->|payment-processing| acmepay_orchestrator
     acmepay_fraud -->|ml-scoring| ext_fraud_provider
-    acmepay_ledger --> acmepay_eventbus
-    acmepay_notify --> acmepay_eventbus
+    acmepay_ledger -->|unknown| acmepay_eventbus
+    acmepay_notify -->|unknown| acmepay_eventbus
     acmepay_notify -->|email-sms-delivery| ext_messaging
     acmepay_orchestrator -->|fraud-check| acmepay_fraud
     acmepay_orchestrator -->|charge-processing| acmepay_psp
-    acmepay_orchestrator --> acmepay_eventbus
+    acmepay_orchestrator -->|unknown| acmepay_eventbus
     acmepay_psp -->|payment-processing| ext_psp_gateway
-    acmepay_recon --> acmepay_eventbus
-    acmepay_reporting --> acmepay_eventbus
+    acmepay_recon -->|unknown| acmepay_eventbus
+    acmepay_reporting -->|unknown| acmepay_eventbus
     acmepay_reporting -->|data-export| ext_dwh
-    acmepay_settlement --> acmepay_eventbus
+    acmepay_settlement -->|unknown| acmepay_eventbus
     acmepay_settlement -->|payout-processing| ext_bank_rails
     acmepay_webhook -->|payment-update| acmepay_orchestrator
     acmepay_gateway -->|token-validation| acmepay_auth
